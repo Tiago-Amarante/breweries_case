@@ -13,6 +13,9 @@
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 spark/jars/*
+spark_files/jars/*
+# Specifically exclude the large JAR file
+spark_files/jars/aws-java-sdk-bundle-1.12.262.jar
 # Mono auto generated files
 mono_crash.*
 
