@@ -1,219 +1,112 @@
-# Data Engineering Architecture: Spark on Airflow with MinIO
+# Brewery Data Pipeline
 
-This project provides a complete data engineering architecture that integrates:
-- Apache Airflow for workflow orchestration
-- Apache Spark (single-node) for data processing
-- MinIO for S3-compatible object storage
-- PySpark for Python-based data processing
+A complete data engineering architecture using Apache Airflow, Apache Spark, and MinIO for processing and analyzing brewery data.
 
 ## Architecture Overview
 
-![Architecture Diagram](docs/architecture.png)
+This project implements a data pipeline that:
 
-The architecture consists of the following components:
+1. Generates sample brewery data
+2. Processes the data using Apache Spark
+3. Stores the processed data in MinIO (S3-compatible storage)
+4. Creates analytics views for visualization
 
-1. **Apache Airflow**: Handles workflow orchestration, scheduling, and monitoring of data pipelines
-2. **Apache Spark (Single Node)**: Processes data using the Spark engine
-3. **MinIO**: Provides S3-compatible object storage for storing processed data
-4. **PySpark**: Python API for Apache Spark used in Airflow DAGs
+## Components
 
-## Directory Structure
+- **Apache Airflow**: Orchestration platform for managing workflows
+- **Apache Spark**: Distributed computing system for data processing
+- **MinIO**: S3-compatible object storage for data storage
+- **PostgreSQL**: Database for Airflow metadata
+- **Redis**: Message broker for Airflow's Celery executor
 
-```
-.
-├── airflow/                # Airflow Docker configuration
-│   ├── Dockerfile          # Custom Airflow image with PySpark
-│   └── spark-defaults.conf # Spark configuration for Airflow
-├── dags/                   # Airflow DAG files
-│   ├── pyspark_minio_example.py     # Simple example DAG
-│   └── pyspark_etl_pipeline.py      # Complete ETL pipeline example
-├── logs/                   # Airflow logs (mounted volume)
-├── plugins/                # Airflow plugins (mounted volume)
-├── spark/                  # Spark Docker configuration
-│   ├── Dockerfile          # Spark Docker image
-│   ├── spark-defaults.conf # Spark configuration
-│   ├── download_jars.sh    # Script to download required JARs
-│   └── jars/               # Directory for Hadoop/AWS JARs
-├── spark_files/            # Shared files between Airflow and Spark
-│   └── data/               # Sample data directory (created at runtime)
-├── spark_data/             # Local storage for Spark data processing
-└── docker-compose.yml      # Docker Compose configuration file
-```
+## Getting Started
 
-## Prerequisites
+### Prerequisites
 
-- Docker
-- Docker Compose
+- Docker and Docker Compose
 - Git
-- 8GB+ RAM recommended for running all services
-- curl (for the start script to check service health)
+- 8GB+ RAM recommended
 
-## Detailed Setup Instructions
+### Installation
 
-### Step 1: Clone the Repository
-
-```bash
-git clone <repository-url>
-cd <repository-directory>
-```
-
-### Step 2: Run the Start Script
-
-The most straightforward way to set up the environment is to use the provided start script:
-
-```bash
-chmod +x start.sh
-./start.sh
-```
-
-This script will:
-1. Create all necessary directories
-2. Download required JAR files for S3 connectivity
-3. Start all services using Docker Compose
-4. Monitor service health and display access information
-5. Create required directories in Airflow containers for local Spark processing
-
-### Step 3: Manual Setup (Alternative)
-
-If you prefer a manual setup:
-
-1. Create necessary directories:
+1. Clone this repository:
    ```bash
-   mkdir -p logs plugins spark_files/data spark_files/jars spark_data
+   git clone https://github.com/yourusername/brewery-data-pipeline.git
+   cd brewery-data-pipeline
    ```
 
-2. Download required JAR files:
+2. Run the start script:
    ```bash
-   cd spark
-   chmod +x download_jars.sh
-   ./download_jars.sh
-   cd ..
+   ./start.sh
+   ```
+   
+   This script will:
+   - Create necessary directories
+   - Download required JAR files for S3 connectivity
+   - Start all services with Docker Compose
+   - Configure MinIO buckets
+
+3. Access the services:
+   - Airflow UI: http://localhost:8080 (login with username: `airflow`, password: `airflow`)
+   - MinIO Console: http://localhost:9001 (login with access key: `minioadmin`, secret key: `minioadmin`)
+   - Spark Master UI: http://localhost:8181
+   - Spark Worker UI: http://localhost:8182
+
+## DAGs (Directed Acyclic Graphs)
+
+This project includes two DAGs:
+
+1. **pyspark_minio_example**: Simple example showcasing PySpark with MinIO integration
+   - Creates sample brewery data
+   - Writes it to MinIO
+   - Reads it back and performs transformations
+   - Performs simple analytics
+
+2. **brewery_etl_pipeline**: Complete ETL pipeline for brewery data
+   - Generates sample data for breweries, beers, and reviews
+   - Processes each dataset with transformations
+   - Loads data into MinIO
+   - Creates analytics views for reporting
+
+## Architecture Improvements
+
+This architecture stores all data in MinIO (S3-compatible storage) instead of using local storage, providing:
+
+- Better scalability - MinIO can handle much larger datasets
+- Improved reliability - Data is stored in a dedicated object storage service
+- Better separation of concerns - Compute (Spark) is separated from storage (MinIO)
+- Easier access to data from multiple services
+
+## Troubleshooting
+
+If you encounter any issues:
+
+1. Check container logs:
+   ```bash
+   docker-compose logs [service_name]
    ```
 
-3. Build and start the services:
+2. Ensure all services are running:
    ```bash
-   docker-compose up -d
+   docker-compose ps
    ```
 
-4. Create the spark data directory in Airflow containers:
+3. Restart all services:
    ```bash
-   docker exec <airflow-webserver-container-name> mkdir -p /opt/airflow/spark_data
-   docker exec <airflow-worker-container-name> mkdir -p /opt/airflow/spark_data
-   docker exec <airflow-scheduler-container-name> mkdir -p /opt/airflow/spark_data
+   docker-compose down
+   ./start.sh
    ```
-
-### Step 4: Access the Services
-
-Once the services are up and running:
-
-- **Airflow UI**: http://localhost:8080 (user: airflow, password: airflow)
-- **Spark Master UI**: http://localhost:8181
-- **MinIO Console**: http://localhost:9001 (user: minioadmin, password: minioadmin)
-
-## Python Version Compatibility
-
-This architecture has been configured to handle potential Python version differences between containers. The DAGs use local Spark execution mode and ensure consistent Python environments by:
-
-1. Using the same Python executable for both driver and worker processes
-2. Running Spark in local mode within the Airflow worker containers
-3. Using local filesystem storage instead of MinIO for data persistence
-
-This approach ensures compatibility even when Airflow and Spark containers use different Python versions.
-
-## Example DAGs
-
-### 1. Simple PySpark Example
-
-This DAG demonstrates:
-- Creating a sample DataFrame in PySpark
-- Writing data to local storage
-- Reading data from local storage
-- Performing simple transformations
-
-To run this example:
-1. Go to the Airflow UI (http://localhost:8080)
-2. Navigate to DAGs
-3. Enable and trigger the `pyspark_minio_example` DAG
-
-### 2. Complete ETL Pipeline
-
-This DAG demonstrates a complete ETL pipeline:
-- Extracting data from CSV files
-- Transforming the data using PySpark
-- Loading the processed data into local storage
-- Creating analytics views for reporting
-
-To run this example:
-1. Go to the Airflow UI (http://localhost:8080)
-2. Navigate to DAGs
-3. Enable and trigger the `brewery_etl_pipeline` DAG
-
-## Monitoring and Troubleshooting
-
-### Checking Logs
-
-You can view the logs for specific services using Docker Compose:
-
-```bash
-docker-compose logs -f airflow-webserver    # Airflow Webserver logs
-docker-compose logs -f airflow-scheduler    # Airflow Scheduler logs
-docker-compose logs -f airflow-worker       # Airflow Worker logs
-docker-compose logs -f spark                # Spark Master logs
-docker-compose logs -f spark-worker         # Spark Worker logs
-docker-compose logs -f minio                # MinIO logs
-```
-
-Airflow task logs can be viewed in the Airflow UI or by checking:
-
-```bash
-ls -la logs/dag_id/task_id/year-month-day
-```
-
-### Common Issues and Solutions
-
-#### 1. Python Version Mismatch
-
-**Issue**: Error message about different Python versions between driver and worker.
-**Solution**: The DAGs are now configured to use local Spark execution mode and the same Python executable, which should avoid this issue.
-
-#### 2. Memory Issues
-
-**Issue**: Docker containers getting killed or out-of-memory errors.
-**Solution**: Increase Docker memory limits in Docker Desktop settings or Docker daemon configuration.
-
-#### 3. Connectivity Between Services
-
-**Issue**: Services cannot connect to each other.
-**Solution**: Check Docker network configuration and ensure all services are in the same network.
-
-#### 4. S3A/MinIO Connectivity Issues
-
-**Issue**: Cannot connect to MinIO or S3A filesystem errors.
-**Solution**: For issues with S3A connectivity, check if the required JAR files are properly downloaded in the `spark/jars/` directory.
 
 ## Stopping the Services
 
 To stop all services:
-
 ```bash
 docker-compose down
 ```
 
-To stop and remove volumes (this will delete all data):
-
+To remove all data and start fresh:
 ```bash
 docker-compose down -v
-```
-
-## Extending the Architecture
-
-To extend this architecture:
-
-1. **Add new DAGs**: Create new Python files in the `dags/` directory
-2. **Install additional Python packages**: Modify the `airflow/Dockerfile` or `spark/Dockerfile`
-3. **Configure Spark settings**: Modify the `spark-defaults.conf` files
-4. **Add new data sources**: Update the extraction steps in your DAGs
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details. 
+rm -rf logs/* spark_files/data/*
+./start.sh
+``` 

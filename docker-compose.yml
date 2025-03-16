@@ -189,10 +189,12 @@ services:
       - minio
     entrypoint: >
       /bin/sh -c "
-      sleep 10;
+      echo 'Waiting for MinIO to be available...';
+      sleep 15;
       /usr/bin/mc config host add myminio http://minio:9000 minioadmin minioadmin;
       /usr/bin/mc mb --ignore-existing myminio/spark-warehouse;
       /usr/bin/mc policy set public myminio/spark-warehouse;
+      echo 'MinIO configuration complete';
       exit 0;
       "
     restart: on-failure

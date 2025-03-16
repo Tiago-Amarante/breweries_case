@@ -40,16 +40,37 @@ def create_spark_session():
     os.environ['PYSPARK_PYTHON'] = python_executable
     os.environ['PYSPARK_DRIVER_PYTHON'] = python_executable
     
+    # Load additional JARs for S3 connectivity
+    spark_jars_dir = "/opt/spark_files/jars"
+    if not os.path.exists(spark_jars_dir):
+        os.makedirs(spark_jars_dir, exist_ok=True)
+    
+    # Copy JAR files from spark/jars to a location accessible to Airflow
+    os.system("cp /opt/spark/jars/* /opt/spark_files/jars/ 2>/dev/null || true")
+    
+    # Find all JAR files
+    jars = []
+    if os.path.exists(spark_jars_dir):
+        jars = [os.path.join(spark_jars_dir, jar) for jar in os.listdir(spark_jars_dir) if jar.endswith('.jar')]
+    
+    jars_list = ",".join(jars)
+    print(f"Loading JAR files: {jars_list}")
+    
     return (SparkSession.builder
             .appName("Brewery ETL Pipeline")
             # Use local mode to avoid Python version conflicts
             .master("local[*]")
+            # Add JARs if found
+            .config("spark.jars", jars_list)
             .config("spark.hadoop.fs.s3a.endpoint", "http://minio:9000")
             .config("spark.hadoop.fs.s3a.access.key", "minioadmin")
             .config("spark.hadoop.fs.s3a.secret.key", "minioadmin")
             .config("spark.hadoop.fs.s3a.path.style.access", "true")
             .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
             .config("spark.hadoop.fs.s3a.aws.credentials.provider", "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider")
+            # Add these configurations to fix S3A compatibility issues
+            .config("spark.hadoop.fs.s3a.connection.ssl.enabled", "false")
+            .config("spark.hadoop.fs.s3a.committer.magic.enabled", "true")
             # Set modest resource requirements
             .config("spark.executor.memory", "512m")
             .config("spark.driver.memory", "512m")
@@ -116,7 +137,7 @@ def generate_sample_data(**kwargs):
     return data_dir
 
 def extract_transform_breweries(**kwargs):
-    """Extract brewery data, perform transformations, and load to local filesystem."""
+    """Extract brewery data, perform transformations, and load to MinIO."""
     spark = create_spark_session()
     data_dir = kwargs['ti'].xcom_pull(task_ids='generate_sample_data')
     
@@ -149,21 +170,17 @@ def extract_transform_breweries(**kwargs):
     print("Transformed Breweries Data:")
     transformed_df.show()
     
-    # Create local directory
-    local_data_dir = "/opt/airflow/spark_data"
-    os.makedirs(local_data_dir, exist_ok=True)
-    
-    # Write to local filesystem
+    # Write to MinIO
     transformed_df.write \
         .mode("overwrite") \
-        .parquet(f"{local_data_dir}/breweries/")
+        .parquet("s3a://spark-warehouse/breweries/")
     
-    print(f"Brewery data written to local filesystem at {local_data_dir}/breweries/")
+    print("Brewery data written to MinIO at s3a://spark-warehouse/breweries/")
     
     spark.stop()
 
 def extract_transform_beers(**kwargs):
-    """Extract beer data, perform transformations, and load to local filesystem."""
+    """Extract beer data, perform transformations, and load to MinIO."""
     spark = create_spark_session()
     data_dir = kwargs['ti'].xcom_pull(task_ids='generate_sample_data')
     
@@ -201,21 +218,17 @@ def extract_transform_beers(**kwargs):
     print("Transformed Beers Data:")
     transformed_df.show()
     
-    # Create local directory
-    local_data_dir = "/opt/airflow/spark_data"
-    os.makedirs(local_data_dir, exist_ok=True)
-    
-    # Write to local filesystem
+    # Write to MinIO
     transformed_df.write \
         .mode("overwrite") \
-        .parquet(f"{local_data_dir}/beers/")
+        .parquet("s3a://spark-warehouse/beers/")
     
-    print(f"Beer data written to local filesystem at {local_data_dir}/beers/")
+    print("Beer data written to MinIO at s3a://spark-warehouse/beers/")
     
     spark.stop()
 
 def extract_transform_reviews(**kwargs):
-    """Extract review data, perform transformations, and load to local filesystem."""
+    """Extract review data, perform transformations, and load to MinIO."""
     spark = create_spark_session()
     data_dir = kwargs['ti'].xcom_pull(task_ids='generate_sample_data')
     
@@ -252,17 +265,13 @@ def extract_transform_reviews(**kwargs):
     print("Transformed Reviews Data:")
     transformed_df.show()
     
-    # Create local directory
-    local_data_dir = "/opt/airflow/spark_data"
-    os.makedirs(f"{local_data_dir}/reviews", exist_ok=True)
-    
-    # Write to local filesystem with partitioning
+    # Write to MinIO with partitioning
     transformed_df.write \
         .mode("overwrite") \
         .partitionBy("year", "month") \
-        .parquet(f"{local_data_dir}/reviews/")
+        .parquet("s3a://spark-warehouse/reviews/")
     
-    print(f"Review data written to local filesystem at {local_data_dir}/reviews/")
+    print("Review data written to MinIO at s3a://spark-warehouse/reviews/")
     
     spark.stop()
 
@@ -270,13 +279,10 @@ def create_analytics_views(**kwargs):
     """Create analytics views from the processed data."""
     spark = create_spark_session()
     
-    # Local paths for data
-    local_data_dir = "/opt/airflow/spark_data"
-    
-    # Read the transformed data
-    breweries_df = spark.read.parquet(f"{local_data_dir}/breweries/")
-    beers_df = spark.read.parquet(f"{local_data_dir}/beers/")
-    reviews_df = spark.read.parquet(f"{local_data_dir}/reviews/")
+    # Read the transformed data from MinIO
+    breweries_df = spark.read.parquet("s3a://spark-warehouse/breweries/")
+    beers_df = spark.read.parquet("s3a://spark-warehouse/beers/")
+    reviews_df = spark.read.parquet("s3a://spark-warehouse/reviews/")
     
     # Register as temp views for SQL
     breweries_df.createOrReplaceTempView("breweries")
@@ -297,8 +303,8 @@ def create_analytics_views(**kwargs):
     print("Top Rated Beers:")
     top_beers.show()
     
-    # Save to local filesystem
-    top_beers.write.mode("overwrite").parquet(f"{local_data_dir}/analytics/top_beers/")
+    # Save to MinIO
+    top_beers.write.mode("overwrite").parquet("s3a://spark-warehouse/analytics/top_beers/")
     
     # 2. Brewery performance
     brewery_performance = spark.sql("""
@@ -321,8 +327,8 @@ def create_analytics_views(**kwargs):
     print("Brewery Performance:")
     brewery_performance.show()
     
-    # Save to local filesystem
-    brewery_performance.write.mode("overwrite").parquet(f"{local_data_dir}/analytics/brewery_performance/")
+    # Save to MinIO
+    brewery_performance.write.mode("overwrite").parquet("s3a://spark-warehouse/analytics/brewery_performance/")
     
     # 3. Beer style popularity
     style_popularity = spark.sql("""
@@ -342,8 +348,8 @@ def create_analytics_views(**kwargs):
     print("Beer Style Popularity:")
     style_popularity.show()
     
-    # Save to local filesystem
-    style_popularity.write.mode("overwrite").parquet(f"{local_data_dir}/analytics/style_popularity/")
+    # Save to MinIO
+    style_popularity.write.mode("overwrite").parquet("s3a://spark-warehouse/analytics/style_popularity/")
     
     spark.stop()
 

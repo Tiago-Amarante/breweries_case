@@ -36,16 +36,37 @@ def create_spark_session():
     os.environ['PYSPARK_PYTHON'] = python_executable
     os.environ['PYSPARK_DRIVER_PYTHON'] = python_executable
     
+    # Load additional JARs for S3 connectivity
+    spark_jars_dir = "/opt/spark_files/jars"
+    if not os.path.exists(spark_jars_dir):
+        os.makedirs(spark_jars_dir, exist_ok=True)
+    
+    # Copy JAR files from spark/jars to a location accessible to Airflow
+    os.system("cp /opt/spark/jars/* /opt/spark_files/jars/ 2>/dev/null || true")
+    
+    # Find all JAR files
+    jars = []
+    if os.path.exists(spark_jars_dir):
+        jars = [os.path.join(spark_jars_dir, jar) for jar in os.listdir(spark_jars_dir) if jar.endswith('.jar')]
+    
+    jars_list = ",".join(jars)
+    print(f"Loading JAR files: {jars_list}")
+    
     return (SparkSession.builder
             .appName("PySpark MinIO Example")
             # Use local mode to avoid Python version conflicts
             .master("local[*]")  
+            # Add JARs if found
+            .config("spark.jars", jars_list)
             .config("spark.hadoop.fs.s3a.endpoint", "http://minio:9000")
             .config("spark.hadoop.fs.s3a.access.key", "minioadmin")
             .config("spark.hadoop.fs.s3a.secret.key", "minioadmin")
             .config("spark.hadoop.fs.s3a.path.style.access", "true")
             .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
             .config("spark.hadoop.fs.s3a.aws.credentials.provider", "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider")
+            # Add these configurations to fix S3A compatibility issues
+            .config("spark.hadoop.fs.s3a.connection.ssl.enabled", "false")
+            .config("spark.hadoop.fs.s3a.committer.magic.enabled", "true")
             # Set modest resource requirements
             .config("spark.executor.memory", "512m")
             .config("spark.driver.memory", "512m")
@@ -55,7 +76,7 @@ def create_spark_session():
             .getOrCreate())
 
 def create_sample_data():
-    """Create sample data and save to local filesystem."""
+    """Create sample data and save to MinIO."""
     spark = create_spark_session()
     
     # Create a sample DataFrame
@@ -73,29 +94,20 @@ def create_sample_data():
     print("Original DataFrame:")
     df.show()
     
-    # Create a local directory for data
-    local_data_dir = "/opt/airflow/spark_data"
-    os.makedirs(local_data_dir, exist_ok=True)
+    # Write the DataFrame to MinIO
+    df.write.mode("overwrite").parquet("s3a://spark-warehouse/breweries")
     
-    # Write the DataFrame to local filesystem
-    local_path = f"{local_data_dir}/breweries"
-    df.write.mode("overwrite").parquet(local_path)
-    
-    print(f"Data written to local filesystem at {local_path}")
+    print("Data written to MinIO at s3a://spark-warehouse/breweries")
     spark.stop()
 
 def read_and_transform_data():
-    """Read data from local filesystem and perform a transformation."""
+    """Read data from MinIO and perform a transformation."""
     spark = create_spark_session()
     
-    # Local path for data
-    local_data_dir = "/opt/airflow/spark_data"
-    local_path = f"{local_data_dir}/breweries"
+    # Read DataFrame from MinIO
+    df = spark.read.parquet("s3a://spark-warehouse/breweries")
     
-    # Read DataFrame from local filesystem
-    df = spark.read.parquet(local_path)
-    
-    print("DataFrame read from local filesystem:")
+    print("DataFrame read from MinIO:")
     df.show()
     
     # Perform a simple transformation
@@ -104,23 +116,18 @@ def read_and_transform_data():
     print("Transformed DataFrame:")
     df_transformed.show()
     
-    # Write transformed data back to local filesystem
-    transformed_path = f"{local_data_dir}/breweries_transformed"
-    df_transformed.write.mode("overwrite").parquet(transformed_path)
+    # Write transformed data back to MinIO
+    df_transformed.write.mode("overwrite").parquet("s3a://spark-warehouse/breweries_transformed")
     
-    print(f"Transformed data written to local filesystem at {transformed_path}")
+    print("Transformed data written to MinIO at s3a://spark-warehouse/breweries_transformed")
     spark.stop()
 
 def analyze_data():
     """Perform analytics on the data."""
     spark = create_spark_session()
     
-    # Local path for data
-    local_data_dir = "/opt/airflow/spark_data"
-    transformed_path = f"{local_data_dir}/breweries_transformed"
-    
-    # Read transformed DataFrame from local filesystem
-    df = spark.read.parquet(transformed_path)
+    # Read transformed DataFrame from MinIO
+    df = spark.read.parquet("s3a://spark-warehouse/breweries_transformed")
     
     # Group by location and calculate average rating
     df_analytics = df.groupBy("location").agg({"rating": "avg"})
@@ -129,11 +136,10 @@ def analyze_data():
     print("Analytics Result:")
     df_analytics.show()
     
-    # Write analytics results to local filesystem
-    analytics_path = f"{local_data_dir}/breweries_analytics"
-    df_analytics.write.mode("overwrite").parquet(analytics_path)
+    # Write analytics results to MinIO
+    df_analytics.write.mode("overwrite").parquet("s3a://spark-warehouse/breweries_analytics")
     
-    print(f"Analytics data written to local filesystem at {analytics_path}")
+    print("Analytics data written to MinIO at s3a://spark-warehouse/breweries_analytics")
     spark.stop()
 
 # Define the DAG

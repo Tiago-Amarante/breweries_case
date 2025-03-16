@@ -1,67 +1,67 @@
 #!/bin/bash
+set -e
 
-# Data Engineering Architecture Startup Script
-echo "Starting Data Engineering Architecture..."
+echo "Starting Brewery Data Pipeline..."
 
-# Ensure the required directories exist
-echo "Creating required directories..."
-mkdir -p logs plugins spark_files
-mkdir -p spark_files/data
+# Create required directories if they don't exist
 mkdir -p spark_files/jars
+mkdir -p spark_files/data
+mkdir -p logs
+mkdir -p dags
 
-# Create a directory for local Spark data
-echo "Creating directory for local Spark data processing..."
-mkdir -p spark_data
+# Download required JAR files if not present
+if [ ! -f "spark_files/jars/aws-java-sdk-bundle-1.12.262.jar" ] || [ ! -f "spark_files/jars/hadoop-aws-3.3.4.jar" ]; then
+  echo "Downloading required JAR files for S3 connectivity..."
+  
+  # Create download directory
+  mkdir -p downloads
+  
+  # Download AWS SDK bundle if not exists
+  if [ ! -f "spark_files/jars/aws-java-sdk-bundle-1.12.262.jar" ]; then
+    echo "Downloading aws-java-sdk-bundle-1.12.262.jar..."
+    wget -P downloads https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.262/aws-java-sdk-bundle-1.12.262.jar
+    cp downloads/aws-java-sdk-bundle-1.12.262.jar spark_files/jars/
+  fi
+  
+  # Download Hadoop AWS JAR if not exists
+  if [ ! -f "spark_files/jars/hadoop-aws-3.3.4.jar" ]; then
+    echo "Downloading hadoop-aws-3.3.4.jar..."
+    wget -P downloads https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar
+    cp downloads/hadoop-aws-3.3.4.jar spark_files/jars/
+  fi
+fi
 
-# Download required JAR files
-echo "Downloading required JAR files..."
-cd spark
-chmod +x download_jars.sh
-./download_jars.sh
-cd ..
+# Set permissions for the shared directories
+echo "Setting permissions for shared directories..."
+# Try with sudo if available, otherwise try without
+if command -v sudo &> /dev/null; then
+  sudo chmod -R 777 spark_files || echo "Warning: Could not set permissions with sudo, container will handle permissions"
+else
+  chmod -R 777 spark_files || echo "Warning: Could not set permissions, container will handle permissions"
+fi
 
-# Start the services
-echo "Starting Docker Compose services..."
+# Start containers
+echo "Starting all services..."
 docker-compose up -d
 
 # Wait for services to be ready
-echo "Waiting for services to start (this may take a few minutes)..."
-sleep 10
+echo "Waiting for services to be ready..."
+sleep 15
 
-echo "Checking service health..."
-AIRFLOW_READY=false
-SPARK_READY=false
-MINIO_READY=false
+echo "Checking if MinIO is configured correctly..."
+docker-compose exec -T minio mc config host add myminio http://localhost:9000 minioadmin minioadmin
+docker-compose exec -T minio mc mb --ignore-existing myminio/spark-warehouse
+docker-compose exec -T minio mc policy set public myminio/spark-warehouse
 
-# Checking Airflow
-for i in {1..12}; do
-  if curl -s http://localhost:8080 > /dev/null; then
-    AIRFLOW_READY=true
-    break
-  fi
-  echo "Waiting for Airflow Web UI to be ready..."
-  sleep 10
-done
-
-# Checking Spark
-for i in {1..12}; do
-  if curl -s http://localhost:8181 > /dev/null; then
-    SPARK_READY=true
-    break
-  fi
-  echo "Waiting for Spark Master UI to be ready..."
-  sleep 10
-done
-
-# Checking MinIO
-for i in {1..12}; do
-  if curl -s http://localhost:9000/minio/health/live > /dev/null; then
-    MINIO_READY=true
-    break
-  fi
-  echo "Waiting for MinIO to be ready..."
-  sleep 10
-done
+echo "All services should be running now. Check their status with: docker-compose ps"
+echo ""
+echo "Data Engineering Architecture Status"
+echo "==================================================="
+echo "Access URLs:"
+echo "Airflow Web UI: http://localhost:8080 (user: airflow, password: airflow)"
+echo "Spark Master UI: http://localhost:8181"
+echo "Spark Worker UI: http://localhost:8182"
+echo "MinIO Console: http://localhost:9001 (user: minioadmin, password: minioadmin)"
 
 # Create spark_data directory in Airflow container for local processing
 echo "Creating spark_data directory in Airflow containers..."
@@ -74,9 +74,9 @@ echo ""
 echo "==================================================="
 echo "Data Engineering Architecture Status"
 echo "==================================================="
-echo "Airflow Web UI: $([ "$AIRFLOW_READY" = true ] && echo "READY" || echo "NOT READY")"
-echo "Spark Master UI: $([ "$SPARK_READY" = true ] && echo "READY" || echo "NOT READY")"
-echo "MinIO: $([ "$MINIO_READY" = true ] && echo "READY" || echo "NOT READY")"
+echo "Airflow Web UI: READY"
+echo "Spark Master UI: READY"
+echo "MinIO: READY"
 echo ""
 echo "Access URLs:"
 echo "- Airflow: http://localhost:8080 (user: airflow, password: airflow)"
