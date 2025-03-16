@@ -1,16 +1,18 @@
 #!/bin/bash
 set -e
 
-# Ensure JAR files are copied to the shared volume on container start
-if [ "$(id -u)" = "0" ]; then
+# Ensure JAR files are available to Spark from the shared volume
+if [ -d "/opt/spark_files/jars" ]; then
+  echo "Copying JAR files from shared volume to Spark..."
+  # Copy JAR files from shared volume to Spark jars directory
+  cp -f /opt/spark_files/jars/*.jar /opt/bitnami/spark/jars/ 2>/dev/null || true
+  
   # If running as root, set proper permissions
-  mkdir -p /opt/spark_files/jars
-  cp /opt/bitnami/spark/jars/aws-java-sdk-bundle-*.jar /opt/spark_files/jars/ 2>/dev/null || true
-  cp /opt/bitnami/spark/jars/hadoop-aws-*.jar /opt/spark_files/jars/ 2>/dev/null || true
-  chmod -R 777 /opt/spark_files
+  if [ "$(id -u)" = "0" ]; then
+    chmod -R 777 /opt/spark_files
+  fi
 else
-  # If running as non-root, use original entry point behavior
-  echo "Running as non-root user, skipping permission setup"
+  echo "Warning: JAR files directory not found in shared volume"
 fi
 
 # Execute the original entry point

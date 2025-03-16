@@ -20,9 +20,8 @@ RUN pip3 install --no-cache-dir \
     pandas \
     pyarrow
 
-# Add Hadoop AWS jars
+# Create jars directory (don't copy anything - we'll use the shared jars)
 RUN mkdir -p /opt/bitnami/spark/jars
-COPY jars/* /opt/bitnami/spark/jars/
 
 # Copy the Spark configuration file
 COPY spark-defaults.conf /opt/bitnami/spark/conf/
@@ -34,9 +33,6 @@ ENV PYSPARK_DRIVER_PYTHON=python3
 # Create shared directories for data exchange
 RUN mkdir -p /opt/spark_files/jars && \
     mkdir -p /opt/spark_files/data && \
-    # Copy AWS JAR files to shared volume for Airflow to use
-    cp /opt/bitnami/spark/jars/aws-java-sdk-bundle-*.jar /opt/spark_files/jars/ 2>/dev/null || true && \
-    cp /opt/bitnami/spark/jars/hadoop-aws-*.jar /opt/spark_files/jars/ 2>/dev/null || true && \
     # Ensure permissions are correct for shared directories
     chmod -R 777 /opt/spark_files
 
