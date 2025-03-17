@@ -28,14 +28,16 @@ services:
   airflow-webserver:
     build: ./airflow
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
       - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://airflow:airflow@postgres/airflow
       - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/0
-      - AIRFLOW__CORE__FERNET_KEY=''
+      - AIRFLOW__CORE__FERNET_KEY='BpH0-KmK4m2t9Nt6UqgBFS8XmaP7cXlJo1K8T4PZK-U='
       - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
       - AIRFLOW__CORE__LOAD_EXAMPLES=false
       - AIRFLOW_HOME=/opt/airflow
@@ -43,7 +45,7 @@ services:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
       - ./plugins:/opt/airflow/plugins
-      - ./spark_files:/opt/spark_files
+      - ./spark/spark_files:/opt/spark_files
     ports:
       - "8080:8080"
     command: webserver
@@ -64,7 +66,7 @@ services:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
       - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://airflow:airflow@postgres/airflow
       - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/0
-      - AIRFLOW__CORE__FERNET_KEY=''
+      - AIRFLOW__CORE__FERNET_KEY='BpH0-KmK4m2t9Nt6UqgBFS8XmaP7cXlJo1K8T4PZK-U='
       - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
       - AIRFLOW__CORE__LOAD_EXAMPLES=false
       - AIRFLOW_HOME=/opt/airflow
@@ -72,7 +74,7 @@ services:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
       - ./plugins:/opt/airflow/plugins
-      - ./spark_files:/opt/spark_files
+      - ./spark/spark_files:/opt/spark_files
     command: scheduler
     restart: always
     user: "${AIRFLOW_UID:-50000}:0"
@@ -86,13 +88,14 @@ services:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
       - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://airflow:airflow@postgres/airflow
       - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/0
-      - AIRFLOW__CORE__FERNET_KEY=''
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__CORE__FERNET_KEY='BpH0-KmK4m2t9Nt6UqgBFS8XmaP7cXlJo1K8T4PZK-U='
       - AIRFLOW_HOME=/opt/airflow
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
       - ./plugins:/opt/airflow/plugins
-      - ./spark_files:/opt/spark_files
+      - ./spark/spark_files:/opt/spark_files
     command: celery worker
     restart: always
     user: "${AIRFLOW_UID:-50000}:0"
@@ -106,7 +109,7 @@ services:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
       - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://airflow:airflow@postgres/airflow
       - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/0
-      - AIRFLOW__CORE__FERNET_KEY=''
+      - AIRFLOW__CORE__FERNET_KEY='BpH0-KmK4m2t9Nt6UqgBFS8XmaP7cXlJo1K8T4PZK-U='
       - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
       - AIRFLOW__CORE__LOAD_EXAMPLES=false
       - AIRFLOW_HOME=/opt/airflow
@@ -130,7 +133,7 @@ services:
       - "7077:7077"  # Spark master port
       - "4040:4040"  # Spark application UI
     volumes:
-      - ./spark_files:/opt/spark_files
+      - ./spark/spark_files:/opt/spark_files
     environment:
       - SPARK_MODE=master
       - SPARK_WORKER_CORES=2
@@ -140,6 +143,7 @@ services:
       - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
       - SPARK_SSL_ENABLED=no
       - SPARK_MASTER_WEBUI_PORT=8080
+    command: ["spark-class", "org.apache.spark.deploy.master.Master"]
     restart: always
 
   # Spark worker in the same container
@@ -161,6 +165,7 @@ services:
       - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
       - SPARK_SSL_ENABLED=no
       - SPARK_WORKER_WEBUI_PORT=8081
+    command: ["spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077"]
     restart: always
 
   # MinIO object storage

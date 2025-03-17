@@ -4,30 +4,30 @@ set -e
 echo "Starting Brewery Data Pipeline..."
 
 # Create required directories if they don't exist
-mkdir -p spark_files/jars
-mkdir -p spark_files/data
+mkdir -p spark/spark_files/jars
+mkdir -p spark/spark_files/data
 mkdir -p logs
 mkdir -p dags
 
 # Download required JAR files if not present
-if [ ! -f "spark_files/jars/aws-java-sdk-bundle-1.12.262.jar" ] || [ ! -f "spark_files/jars/hadoop-aws-3.3.4.jar" ]; then
+if [ ! -f "spark/spark_files/jars/aws-java-sdk-bundle-1.12.262.jar" ] || [ ! -f "spark/spark_files/jars/hadoop-aws-3.3.4.jar" ]; then
   echo "Downloading required JAR files for S3 connectivity..."
   
   # Create download directory
   mkdir -p downloads
   
   # Download AWS SDK bundle if not exists
-  if [ ! -f "spark_files/jars/aws-java-sdk-bundle-1.12.262.jar" ]; then
+  if [ ! -f "spark/spark_files/jars/aws-java-sdk-bundle-1.12.262.jar" ]; then
     echo "Downloading aws-java-sdk-bundle-1.12.262.jar..."
     wget -P downloads https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.262/aws-java-sdk-bundle-1.12.262.jar
-    cp downloads/aws-java-sdk-bundle-1.12.262.jar spark_files/jars/
+    cp downloads/aws-java-sdk-bundle-1.12.262.jar spark/spark_files/jars/
   fi
   
   # Download Hadoop AWS JAR if not exists
-  if [ ! -f "spark_files/jars/hadoop-aws-3.3.4.jar" ]; then
+  if [ ! -f "spark/spark_files/jars/hadoop-aws-3.3.4.jar" ]; then
     echo "Downloading hadoop-aws-3.3.4.jar..."
     wget -P downloads https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar
-    cp downloads/hadoop-aws-3.3.4.jar spark_files/jars/
+    cp downloads/hadoop-aws-3.3.4.jar spark/spark_files/jars/
   fi
 fi
 
@@ -35,9 +35,9 @@ fi
 echo "Setting permissions for shared directories..."
 # Try with sudo if available, otherwise try without
 if command -v sudo &> /dev/null; then
-  sudo chmod -R 777 spark_files || echo "Warning: Could not set permissions with sudo, container will handle permissions"
+  sudo chmod -R 777 spark/spark_files || echo "Warning: Could not set permissions with sudo, container will handle permissions"
 else
-  chmod -R 777 spark_files || echo "Warning: Could not set permissions, container will handle permissions"
+  chmod -R 777 spark/spark_files || echo "Warning: Could not set permissions, container will handle permissions"
 fi
 
 # Start containers

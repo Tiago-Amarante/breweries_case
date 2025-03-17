@@ -19,10 +19,10 @@ RUN pip3 install --no-cache-dir \
     pyspark==3.4.1 \
     pandas \
     pyarrow
-
+    
 # Add Hadoop AWS jars
 RUN mkdir -p /opt/bitnami/spark/jars
-COPY jars/* /opt/bitnami/spark/jars/
+COPY spark_files/jars/ /opt/bitnami/spark/jars/
 
 # Copy the Spark configuration file
 COPY spark-defaults.conf /opt/bitnami/spark/conf/
@@ -46,4 +46,4 @@ RUN chmod +x /entrypoint.sh
 
 USER 1001
 
-ENTRYPOINT ["/entrypoint.sh"] 
+ENTRYPOINT ["/entrypoint.sh", "spark-shell"] 
