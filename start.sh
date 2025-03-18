@@ -48,11 +48,6 @@ docker-compose up -d
 echo "Waiting for services to be ready..."
 sleep 15
 
-echo "Checking if MinIO is configured correctly..."
-docker-compose exec -T minio mc config host add myminio http://localhost:9000 minioadmin minioadmin
-docker-compose exec -T minio mc mb --ignore-existing myminio/spark-warehouse
-docker-compose exec -T minio mc policy set public myminio/spark-warehouse
-
 echo "All services should be running now. Check their status with: docker-compose ps"
 echo ""
 echo "Data Engineering Architecture Status"

@@ -11,9 +11,11 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, upper
+from pyspark.sql.types import StructType, StructField, StringType, DoubleType
+from pyspark.sql.functions import col, count
 import os
 import sys
+import requests
 
 # Default arguments for the DAG
 default_args = {
@@ -75,71 +77,91 @@ def create_spark_session():
             .config("spark.pyspark.driver.python", python_executable)
             .getOrCreate())
 
-def create_sample_data():
+def get_breweries():
+    url = "https://api.openbrewerydb.org/breweries"
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # Raise an error for bad responses (4xx and 5xx)
+        breweries = response.json()
+        return breweries
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching data: {e}")
+        return None
+
+def create_bronze_data():
     """Create sample data and save to MinIO."""
     spark = create_spark_session()
     
     # Create a sample DataFrame
-    data = [
-        {"id": 1, "name": "Brewery A", "location": "City X", "rating": 4.5},
-        {"id": 2, "name": "Brewery B", "location": "City Y", "rating": 4.2},
-        {"id": 3, "name": "Brewery C", "location": "City Z", "rating": 4.8},
-        {"id": 4, "name": "Brewery D", "location": "City X", "rating": 3.9},
-        {"id": 5, "name": "Brewery E", "location": "City Y", "rating": 4.1},
-    ]
-    
-    df = spark.createDataFrame(data)
-    
-    # Show the DataFrame
-    print("Original DataFrame:")
-    df.show()
-    
+    data = get_breweries()
+
+    schema = StructType([
+        StructField("id", StringType(), True),
+        StructField("name", StringType(), True),
+        StructField("brewery_type", StringType(), True),
+        StructField("address_1", StringType(), True),
+        StructField("city", StringType(), True),
+        StructField("state_province", StringType(), True),
+        StructField("postal_code", StringType(), True),
+        StructField("country", StringType(), True),
+        StructField("longitude", StringType(), True),
+        StructField("latitude", StringType(), True),
+        StructField("phone", StringType(), True),
+        StructField("website_url", StringType(), True)
+    ])
+    df = spark.createDataFrame(data, schema=schema)
+        
     # Write the DataFrame to MinIO
-    df.write.mode("overwrite").parquet("s3a://spark-warehouse/breweries")
+    df.write.mode("append").parquet("s3a://bronze/breweries")
     
-    print("Data written to MinIO at s3a://spark-warehouse/breweries")
+    print("Data written to MinIO at s3a://bronze/breweries")
     spark.stop()
 
-def read_and_transform_data():
+
+def create_silver_data():
     """Read data from MinIO and perform a transformation."""
     spark = create_spark_session()
     
     # Read DataFrame from MinIO
-    df = spark.read.parquet("s3a://spark-warehouse/breweries")
+    df = spark.read.parquet("s3a://bronze/breweries")
+
     
-    print("DataFrame read from MinIO:")
-    df.show()
+    # Select necessary columns and rename for consistency
+    df_selected = df.select(
+        col("id"),
+        col("name"),
+        col("brewery_type"),
+        col("address_1").alias("address"),
+        col("city"),
+        col("state_province").alias("state"),
+        col("postal_code"),
+        col("country"),
+        col("longitude"),
+        col("latitude"),
+        col("phone"),
+        col("website_url")
+    )
+
+    # Remove duplicates based on name, city, and country
+    df_dropped = df_selected.dropDuplicates(["name", "city", "country"])
+    # Save as Delta table partitioned by country and state
+    df_dropped.write.mode("overwrite").partitionBy("country","city").format("parquet").save("s3a://silver/breweries")
     
-    # Perform a simple transformation
-    df_transformed = df.withColumn("name", upper(col("name")))
-    
-    print("Transformed DataFrame:")
-    df_transformed.show()
-    
-    # Write transformed data back to MinIO
-    df_transformed.write.mode("overwrite").parquet("s3a://spark-warehouse/breweries_transformed")
-    
-    print("Transformed data written to MinIO at s3a://spark-warehouse/breweries_transformed")
     spark.stop()
 
-def analyze_data():
+def create_gold_data():
     """Perform analytics on the data."""
     spark = create_spark_session()
     
     # Read transformed DataFrame from MinIO
-    df = spark.read.parquet("s3a://spark-warehouse/breweries_transformed")
+    df_silver = spark.read.format("parquet").load("s3a://silver/breweries")
     
-    # Group by location and calculate average rating
-    df_analytics = df.groupBy("location").agg({"rating": "avg"})
-    df_analytics = df_analytics.withColumnRenamed("avg(rating)", "avg_rating")
+    df_aggregated = df_silver.groupBy("country", "state", "city", "brewery_type").agg(count("id").alias("brewery_count"))
     
-    print("Analytics Result:")
-    df_analytics.show()
+    # Save as parquet table
+    df_aggregated.write.mode("overwrite").format("parquet").save("s3a://gold/breweries_per_location")
     
-    # Write analytics results to MinIO
-    df_analytics.write.mode("overwrite").parquet("s3a://spark-warehouse/breweries_analytics")
-    
-    print("Analytics data written to MinIO at s3a://spark-warehouse/breweries_analytics")
+
     spark.stop()
 
 # Define the DAG
@@ -150,22 +172,22 @@ with DAG(
     schedule_interval=timedelta(days=1),
     start_date=datetime(2023, 1, 1),
     catchup=False,
-    tags=['example', 'pyspark', 'minio'],
+
 ) as dag:
     
     create_data_task = PythonOperator(
-        task_id='create_sample_data',
-        python_callable=create_sample_data,
+        task_id='create_bronze_data',
+        python_callable=create_bronze_data,
     )
     
     transform_data_task = PythonOperator(
-        task_id='transform_data',
-        python_callable=read_and_transform_data,
+        task_id='create_silver_data',
+        python_callable=create_silver_data,
     )
     
     analyze_data_task = PythonOperator(
-        task_id='analyze_data',
-        python_callable=analyze_data,
+        task_id='create_gold_data',
+        python_callable=create_gold_data,
     )
     
     # Set task dependencies

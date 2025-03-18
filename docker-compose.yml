@@ -197,9 +197,13 @@ services:
       echo 'Waiting for MinIO to be available...';
       sleep 15;
       /usr/bin/mc config host add myminio http://minio:9000 minioadmin minioadmin;
-      /usr/bin/mc mb --ignore-existing myminio/spark-warehouse;
-      /usr/bin/mc policy set public myminio/spark-warehouse;
-      echo 'MinIO configuration complete';
+      /usr/bin/mc mb --ignore-existing myminio/bronze;
+      /usr/bin/mc mb --ignore-existing myminio/silver;
+      /usr/bin/mc mb --ignore-existing myminio/gold;
+      /usr/bin/mc policy set public myminio/bronze;
+      /usr/bin/mc policy set public myminio/silver;
+      /usr/bin/mc policy set public myminio/gold;
+      echo 'MinIO buckets and policies set up successfully!';
       exit 0;
       "
     restart: on-failure
