@@ -14,7 +14,7 @@
 *.userprefs
 spark/jars/*
 spark_files/jars/*
-spark/spark_files/jars/*
+spark/spark_files/jars/*.jars
 
 # Mono auto generated files
 mono_crash.*
