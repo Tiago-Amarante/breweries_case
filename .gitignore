@@ -15,7 +15,7 @@
 spark/jars/*
 spark_files/jars/*
 spark/spark_files/jars/*.jars
-
+spark/spark_files/jars/aws-java-sdk-bundle-1.12.262.jar
 # Mono auto generated files
 mono_crash.*
 
@@ -467,3 +467,158 @@ spark_files/data/
 .vscode/
 *.swp
 *~
+
+# Python standard ignores
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# Documentation
+docs/_build/
+site/
+
+# Test related
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+.benchmarks/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Logs
+logs/
+*.log
+pip-log.txt
+pip-delete-this-directory.txt
+
+# IDE related
+.idea/
+.vscode/
+*.swp
+*~
+.spyderproject
+.spyproject
+.ropeproject
+.project
+.settings/
+.classpath
+.factorypath
+
+# Airflow specific
+airflow.db
+airflow.cfg
+unittests.cfg
+webserver_config.py
+airflow-webserver.pid
+airflow-webserver.pid.*
+
+# Spark specific
+spark-warehouse/
+metastore_db/
+derby.log
+
+# Data files
+*.parquet
+*.csv
+*.tsv
+*.json
+*.avro
+*.orc
+*.pickle
+*.pkl
+
+# JAR files
+*.jar
+spark/jars/
+spark_files/jars/
+spark/spark_files/jars/
+
+# Project specific data directories
+spark_files/data/
+minio-data/
+spark_data/
+data/
+postgres-data/
+duckdb-data/
+
+# MinIO related
+minio-data/
+
+# Docker related
+.dockerignore
+
+# Byte-compiled files
+__pycache__/
+*.py[cod]
+
+# macOS specific files
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows specific files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+
+# Downloaded dependencies
+downloads/
+
+# Temporary files
+tmp/
+temp/
+
+# Generated files during testing
+.pytest_temp/
+test-output/
+
+# Virtual environment
+.venv/
+
+# Local configuration
+local_config.yaml
+local_settings.py

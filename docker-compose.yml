@@ -203,11 +203,35 @@ services:
       /usr/bin/mc policy set public myminio/bronze;
       /usr/bin/mc policy set public myminio/silver;
       /usr/bin/mc policy set public myminio/gold;
+      /usr/bin/mc admin policy attach myminio readwrite --user=minioadmin;
+
       echo 'MinIO buckets and policies set up successfully!';
       exit 0;
       "
     restart: on-failure
+    
+  # DuckDB service for querying MinIO data
+  duckdb:
+    build: ./duckdb
+    depends_on:
+      - minio
+    ports:
+      - "8888:8888"  # JupyterLab interface
+    volumes:
+      - ./duckdb/notebooks:/workspace/notebooks
+      - ./duckdb/scripts:/workspace/scripts
+      - duckdb-data:/workspace/data
+    environment:
+      - S3_ENDPOINT=http://minio:9000
+      - S3_ACCESS_KEY=minioadmin
+      - S3_SECRET_KEY=minioadmin
+      - S3_REGION=us-east-1
+      - JUPYTER_ENABLE_LAB=yes
+      - PYTHONPATH=/workspace
+    restart: always
+    user: "root"  # Run as root to avoid permission issues with kernel installation
 
 volumes:
   postgres-db-volume:
-  minio-data: 
+  minio-data:
+  duckdb-data: 
