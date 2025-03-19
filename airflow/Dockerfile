@@ -37,7 +37,8 @@ RUN pip install --no-cache-dir \
     s3fs \
     pandas \
     pyarrow \
-    minio
+    minio \
+    duckdb==0.9.2
 
 # Set environment variables
 ENV SPARK_HOME=/home/airflow/.local/lib/python3.9/site-packages/pyspark
